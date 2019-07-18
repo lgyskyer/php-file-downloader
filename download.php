@@ -7,10 +7,14 @@ $passKey = "mysecurekey";
 // This must include the trailing '/';
 $saveLocation = "content/";
 
-// Parameters set by the URL string.z
+// Parameters set by the URL string.
 $providedKey = $_GET['key'];
-$fileUrl = $_POST['url'];
-$fileName = $_POST['filename'];
+
+$json_str = file_get_contents('php://input');
+$json_obj = json_decode($json_str);
+
+$fileUrl = $json_obj->url;
+$fileName = $json_obj->filename;
 $showPage = true;
 $showForm = true;
 
@@ -33,7 +37,7 @@ if ($providedKey === $passKey && ($fileUrl === null || $fileName === null)) {
         <title>File Downloader</title>
         <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/4.3.1/css/bootstrap.min.css" integrity="sha256-YLGeXaapI0/5IgZopewRJcFXomhRMlYYjugPLSyNjTY=" crossorigin="anonymous" />
     </head>
-    <body>
+    <body ng-app="downloadModule" ng-controller="downloadController" ng-cloak>
         <div class="container" style="margin-top: 50px;">
             <div class="row">
                 <div class="col-lg-12">
@@ -43,25 +47,30 @@ if ($providedKey === $passKey && ($fileUrl === null || $fileName === null)) {
             <div class="row">
                 <div class="col-lg-6">
                     <?php if ($showForm) : ?>
-                        <div id="downloadForm">
+                        <form ng-show="!isLoading" ng-submit="downloadFile();">
                             <label>File URL:</label>
-                            <input class="form-control" type="text" name="url" id="url" />
+                            <input class="form-control" type="text" ng-model="downloadUrl" required />
                             <br />
                             <label>Filename to Save:</label>
-                            <input class="form-control" type="text" name="filename" id="filename" />
+                            <input class="form-control" type="text" ng-model="downloadFileName" required />
                             <br />
-                            <button class="btn btn-primary" type="button" onclick="startDownload();">Download</button>
-                        </div>
+                            <button class="btn btn-primary" type="submit">Download</button>
+                        </form>
 
-                        <div id="loadingCircle">
+                        <div ng-show="isLoading">
                             <div class="spinner-border" role="status">
                                 <span class="sr-only">Loading...</span>
                             </div>
                         </div>
 
-                        <div id="successResult">
-                            <br />
+                        <br />
+
+                        <div ng-show="isSuccess">
                             <p class="text-success">File has been downloaded!</p>
+                        </div>
+
+                        <div ng-show="isError">
+                            <p class="text-danger">An error occurred downloading the file.</p>
                         </div>
                     <?php else : ?>
                         <p class="text-danger">Error. Incorrect key provided.</p>
@@ -72,28 +81,35 @@ if ($providedKey === $passKey && ($fileUrl === null || $fileName === null)) {
 
         <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.4.1/jquery.min.js" integrity="sha256-CSXorXvZcTkaix6Yvo6HppcZGetbYMGWSFlBw8HfCJo=" crossorigin="anonymous"></script>
         <script src="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/4.3.1/js/bootstrap.min.js" integrity="sha256-CjSoeELFOcH0/uxWu6mC/Vlrc1AARqbm/jiiImDGV3s=" crossorigin="anonymous"></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/angular.js/1.7.8/angular.min.js" integrity="sha256-23hi0Ag650tclABdGCdMNSjxvikytyQ44vYGo9HyOrU=" crossorigin="anonymous"></script>
         <script>
-            $('#loadingCircle').hide();
-            $('#successResult').hide();
-            $('#downloadForm').show();
+            var downloadModule = angular.module('downloadModule', []);
+            downloadModule.controller('downloadController', function ($scope, $http) {
+                $scope.pageKey = '<?php echo $providedKey; ?>';
+                $scope.isLoading = false;
+                $scope.isSuccess = false;
+                $scope.isError = false;
 
-            function startDownload() {
-                $('#loadingCircle').show();
-                $('#downloadForm').hide();
-                $('#successResult').hide();
-                
-                $.post(
-                    "download.php?key=<?php echo $providedKey; ?>", {
-                        url: $('#url').val(),
-                        filename: $('#filename').val()
-                    },
-                    function(data, status) {
-                        $('#loadingCircle').hide();
-                        $('#downloadForm').show();
-                        $('#successResult').show();
-                    }
-                );
-            }
+                $scope.downloadFile = function () {
+                    $scope.isError = false;
+                    $http({
+                        method: 'post',
+                        data: {
+                            url: $scope.downloadUrl,
+                            filename: $scope.downloadFileName
+                        },
+                        url: 'download.php?key=' + $scope.pageKey,
+                        headers: {'Content-Type': 'application/x-www-form-urlencoded'}
+                    }).then(function (success) {
+                        $scope.isSuccess = true;
+                        $scope.downloadUrl = '';
+                        $scope.downloadFileName = '';
+                    }, function (error) {
+                        $scope.isSuccess = false;
+                        $scope.isError = true;
+                    });
+                };
+            });
         </script>
     </body>
 </html>
